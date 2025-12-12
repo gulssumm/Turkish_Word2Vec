@@ -1,0 +1,8 @@
+tvec.txt
+tvec.model
+smart_home_model.model
+*.model
+*.txt
+*.xlsx
+*.docx
+*.pdf
