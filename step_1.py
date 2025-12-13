@@ -3,7 +3,7 @@ import gensim
 from gensim.models import Word2Vec, KeyedVectors
 import re
 import os
-import numpy as np
+from gensim.models.phrases import Phrases, Phraser
 
 INPUT_FILE = "TR_Commands.xlsx"
 OUTPUT_DATASET = "TR_Commands_Expanded.xlsx"
@@ -28,7 +28,6 @@ variations_map = {
 
 try:
     df = pd.read_excel(INPUT_FILE, header=None)
-    # checks if col A is an ID number
     target_col = 1 if (str(df.iloc[0, 0]).isdigit() or "#" in str(df.iloc[0, 0])) else 0
     raw_data = df.iloc[:, target_col].dropna().tolist()
 
@@ -38,11 +37,12 @@ try:
         if not cmd_str or cmd_str.isdigit() or cmd_str == "#": continue
         training_data.append({"Label": cmd_str, "Sentence": cmd_str})
         if cmd_str in variations_map:
-            for v in variations_map[cmd_str]: training_data.append({"Label": cmd_str, "Sentence": v})
+            for v in variations_map[cmd_str]:
+                training_data.append({"Label": cmd_str, "Sentence": v})
 
     full_corpus_df = pd.DataFrame(training_data)
     full_corpus_df.to_excel(OUTPUT_DATASET, index=False)
-    print(f"Dataset saved to '{OUTPUT_DATASET}' with {len(full_corpus_df)} sentences.")
+    print(f"Dataset saved: {len(full_corpus_df)} sentences")
 except Exception as e:
     print(f"Error processing data: {e}")
     exit()
@@ -54,57 +54,78 @@ def clean_text(text):
 
 train_sentences = [clean_text(row) for row in full_corpus_df['Sentence']]
 
+phrases = Phrases(train_sentences, min_count=1, threshold=0.01, scoring='npmi', delimiter='_')
+bigram_transformer = Phraser(phrases)
+train_sentences_ngram = [bigram_transformer[sent] for sent in train_sentences]
+
+print(f"\nOriginal:  {train_sentences[0]}")
+print(f"N-grams:   {train_sentences_ngram[0]}")
+print(f"\nExample transformations:")
+for i in range(min(5, len(train_sentences))):
+    if train_sentences[i] != train_sentences_ngram[i]:
+        print(f"  {train_sentences[i]} → {train_sentences_ngram[i]}")
+        break
+else:
+    print(f"No bigrams in first 5 sentences")
+
+print(f"\nBigrams detected: {len([k for k in phrases.vocab.keys() if '_' in str(k)])}")
 
 if not os.path.exists(REPAIRED_MODEL):
-    print(f"Clean file '{REPAIRED_MODEL}' not found. Creating it from '{PRETRAINED_MODEL}'...")
-
+    print(f"\nConverting '{PRETRAINED_MODEL}' to text format...")
     if not os.path.exists(PRETRAINED_MODEL):
-        # Fallback check
         if os.path.exists("trmodel"):
             PRETRAINED_MODEL = "trmodel"
         else:
-            print(f"Could not find '{PRETRAINED_MODEL}'")
+            print(f"Could not find pre-trained model")
             exit()
 
     try:
-        print("Loading binary file...")
         kv = KeyedVectors.load_word2vec_format(PRETRAINED_MODEL, binary=True, unicode_errors='ignore')
-
-        # Save it as clean text
-        print(f"Saving as text to '{REPAIRED_MODEL}'")
         kv.save_word2vec_format(REPAIRED_MODEL, binary=False)
-
+        print(f"Saved as '{REPAIRED_MODEL}'")
     except Exception as e:
-        print(f"Error converting file: {e}")
+        print(f"Error: {e}")
         exit()
 else:
-    print(f"Found '{REPAIRED_MODEL}', skipping conversion.")
+    print(f"\nFound '{REPAIRED_MODEL}'")
 
-print(f"Loading '{REPAIRED_MODEL}' into memory...")
+print(f"\nLoading pre-trained vectors...")
 try:
-    # Load the clean text model
     pretrained_kv = KeyedVectors.load_word2vec_format(REPAIRED_MODEL, binary=False)
     vector_dim = pretrained_kv.vector_size
-    print(f"Loaded pre-trained vectors. Dimension: {vector_dim}")
+    print(f"Dimension: {vector_dim}")
 
-    # Initialize Smart Home Model
+    print("Training Model 1: Without N-grams")
     model = Word2Vec(vector_size=vector_dim, min_count=1, window=5)
     model.build_vocab(train_sentences)
 
-    # Manual Injection
     count = 0
     for word in model.wv.index_to_key:
         if word in pretrained_kv:
             model.wv[word] = pretrained_kv[word]
             count += 1
 
-    print(f"Transferred vectors for {count} words.")
-
-    # Fine-Tune
+    print(f"Transferred vectors: {count} words")
     model.train(train_sentences, total_examples=len(train_sentences), epochs=20)
-
     model.save(FINETUNED_MODEL)
-    print(f"Model saved as: {FINETUNED_MODEL}")
+    print(f"Saved: {FINETUNED_MODEL}")
+
+    print("Training Model 2: With N-grams")
+    model_ngram = Word2Vec(vector_size=vector_dim, min_count=1, window=5)
+    model_ngram.build_vocab(train_sentences_ngram)
+
+    count_ngram = 0
+    for word in model_ngram.wv.index_to_key:
+        if word in pretrained_kv:
+            model_ngram.wv[word] = pretrained_kv[word]
+            count_ngram += 1
+
+    print(f"Transferred vectors: {count_ngram} words")
+    model_ngram.train(train_sentences_ngram, total_examples=len(train_sentences_ngram), epochs=20)
+
+    FINETUNED_MODEL_NGRAM = "smart_home_model_ngram.model"
+    model_ngram.save(FINETUNED_MODEL_NGRAM)
+    print(f"Saved: {FINETUNED_MODEL_NGRAM}")
 
 except Exception as e:
     print(f"Error during training: {e}")
