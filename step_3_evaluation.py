@@ -61,21 +61,26 @@ def evaluate_model(model_path, method_name, use_tfidf=False, use_ngrams=False):
 
     # Setup vectorization
     tfidf_weights = {}
-    if use_tfidf:
-        tfidf_vectorizer = TfidfVectorizer()
-        tfidf_vectorizer.fit(corpus)
-        tfidf_weights = dict(zip(tfidf_vectorizer.get_feature_names_out(), tfidf_vectorizer.idf_))
-        if use_ngrams:
-            # Apply n-grams to corpus for TF-IDF
-            corpus_ngrams = [' '.join(bigram_transformer[preprocess(s)]) for s in corpus]
+    if use_ngrams:
+        # First transform corpus to n-grams
+        corpus_ngrams = [' '.join(bigram_transformer[preprocess(s)]) for s in corpus]
+
+        if use_tfidf:
+            # Train TF-IDF on n-gram transformed corpus
+            tfidf_vectorizer = TfidfVectorizer()
+            tfidf_vectorizer.fit(corpus_ngrams)
+            tfidf_weights = dict(zip(tfidf_vectorizer.get_feature_names_out(), tfidf_vectorizer.idf_))
             target_vectors = [get_weighted_vector(s, model, tfidf_weights) for s in corpus_ngrams]
         else:
-            target_vectors = [get_weighted_vector(s, model, tfidf_weights) for s in corpus]
-    else:
-        if use_ngrams:
-            # Apply n-grams to corpus for Mean
-            corpus_ngrams = [' '.join(bigram_transformer[preprocess(s)]) for s in corpus]
+            # Mean vectors on n-grams
             target_vectors = [get_mean_vector(s, model) for s in corpus_ngrams]
+    else:
+        # Word-level (no n-grams)
+        if use_tfidf:
+            tfidf_vectorizer = TfidfVectorizer()
+            tfidf_vectorizer.fit(corpus)
+            tfidf_weights = dict(zip(tfidf_vectorizer.get_feature_names_out(), tfidf_vectorizer.idf_))
+            target_vectors = [get_weighted_vector(s, model, tfidf_weights) for s in corpus]
         else:
             target_vectors = [get_mean_vector(s, model) for s in corpus]
 
@@ -121,14 +126,16 @@ def evaluate_model(model_path, method_name, use_tfidf=False, use_ngrams=False):
                 'matched': matched_label
             })
 
-    # Show mismatches
+        # Show mismatches
     if mismatches:
-        print("\nMISMATCHES:")
+        print(f"\nMISMATCHES ({len(mismatches)} errors):")
         for m in mismatches:
-            print(
-                f"'{m['command']}' → Pred: {m['predicted']} | Actual: {m['actual']} | Score: {m['score']:.3f} | Matched: {m['matched']}")
+            pred_str = "ACCEPTED" if m['predicted'] == 1 else "REJECTED"
+            actual_str = "SHOULD ACCEPT" if m['actual'] == 1 else "SHOULD REJECT"
+            print(f"  '{m['command']}'")
+            print(f"   {pred_str} (score: {m['score']:.3f}) | {actual_str} | Matched: {m['matched']}")
     else:
-        print("\nNo mismatches!")
+        print("\nNo mismatches")
 
     # Calculate metrics
     precision = precision_score(ground_truth, predictions, zero_division=0)
@@ -145,8 +152,20 @@ def evaluate_model(model_path, method_name, use_tfidf=False, use_ngrams=False):
     print(f"                     Predicted NO   Predicted YES")
     print(f"  Actual NO  (TN/FP)      {cm[0][0]:4d}           {cm[0][1]:4d}")
     print(f"  Actual YES (FN/TP)      {cm[1][0]:4d}           {cm[1][1]:4d}")
+    print(f"\n  True Negatives (TN):  {cm[0][0]:4d} - Correctly rejected invalid commands")
+    print(f"  False Positives (FP): {cm[0][1]:4d} - Incorrectly accepted invalid commands")
+    print(f"  False Negatives (FN): {cm[1][0]:4d} - Incorrectly rejected valid commands")
+    print(f"  True Positives (TP):  {cm[1][1]:4d} - Correctly accepted valid commands")
 
-    return {"Precision": precision, "Recall": recall, "F1": f1, "Mismatches": len(mismatches)}
+    return {"Precision": precision,
+        "Recall": recall,
+        "F1": f1,
+        "Mismatches": len(mismatches),
+        "TP": cm[1][1],
+        "TN": cm[0][0],
+        "FP": cm[0][1],
+        "FN": cm[1][0]
+    }
 
 
 results = {}
@@ -182,8 +201,14 @@ results["TF-IDF (With N-grams)"] = evaluate_model(
 print("FINAL COMPARISON TABLE")
 print(f"{'Method':<30} {'Precision':<12} {'Recall':<12} {'F1-Score':<12} {'Errors':<10}")
 for method, metrics in results.items():
-    print(
-        f"{method:<30} {metrics['Precision']:<12.3f} {metrics['Recall']:<12.3f} {metrics['F1']:<12.3f} {metrics['Mismatches']:<10d}")
+    print(f"{method:<35} {metrics['Precision']:<12.3f} {metrics['Recall']:<12.3f} {metrics['F1']:<12.3f} {metrics['Mismatches']:<10d}")
 
 best_method = max(results.items(), key=lambda x: x[1]['F1'])
-print(f"\nBEST METHOD: {best_method[0]} (F1: {best_method[1]['F1']:.3f})")
+print(f"BEST METHOD: {best_method[0]}")
+print(f"F1-Score: {best_method[1]['F1']:.3f}")
+print(f"Precision: {best_method[1]['Precision']:.3f}")
+print(f"Recall: {best_method[1]['Recall']:.3f}")
+
+print(f"{'Method':<35} {'TP':<6} {'TN':<6} {'FP':<6} {'FN':<6}")
+for method, metrics in results.items():
+    print(f"{method:<35} {metrics['TP']:<6} {metrics['TN']:<6} {metrics['FP']:<6} {metrics['FN']:<6}")

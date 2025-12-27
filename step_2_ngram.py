@@ -10,6 +10,9 @@ MODEL_PATH = "smart_home_model_ngram.model"
 DATASET_PATH = "TR_Commands_Expanded.xlsx"
 THRESHOLD = 0.75
 
+def preprocess(text):
+    return re.sub(r'[^\w\s]', '', str(text).lower()).split()
+
 try:
     model = Word2Vec.load(MODEL_PATH)
     df = pd.read_excel(DATASET_PATH)
@@ -23,7 +26,7 @@ try:
     bigram = Phraser(phrases)
 
     # Transform corpus to n-grams
-    corpus_ngrams = [' '.join(bigram[s.split()]) for s in corpus]
+    corpus_ngrams = [' '.join(bigram[preprocess(s)]) for s in corpus]
 
     # Train TF-IDF on n-grams
     tfidf_vectorizer = TfidfVectorizer()
@@ -31,15 +34,10 @@ try:
     word2weight = dict(zip(tfidf_vectorizer.get_feature_names_out(), tfidf_vectorizer.idf_))
 
     print(f"N-gram model loaded with {len(model.wv)} phrases")
-    print(f"Example phrases: {list(model.wv.index_to_key)[:5]}")
 
 except Exception as e:
     print(f"Error loading resources: {e}")
     exit()
-
-
-def preprocess(text):
-    return re.sub(r'[^\w\s]', '', str(text).lower()).split()
 
 
 def get_mean_vector(sentence, w2v_model):
