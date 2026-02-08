@@ -1,0 +1,71 @@
+ışığı aç
+ışığı yak
+ışığı söndür
+ışığı kapa
+ışığı arttır
+ışığı kıs
+ışığı azalt
+parlaklığı arttır
+parlaklığı azalt
+aydınlatmayı arttır
+aydınlatmayı azalt
+lambayı aç
+lambayı yak
+lambayı söndür
+lambayı kapat
+kırmızı
+mavi
+yeşil
+prizi aç
+prizi kapat
+klimayı aç
+klimayı kapa
+iklimlendirmeyi aç
+iklimlendirmeyi kapa
+ısıtmayı aç
+ısıtmayı kapa
+ısıt
+soğut
+sıcaklığı arttır
+sıcaklığı düşür
+evi ısıt
+evi soğut
+odayı ısıt
+odayı soğut
+kombiyi aç
+kombiyi kapa
+oda kaç derece
+içerisi kaç derece
+hava kaç derece
+modu değiştir
+fanı aç
+fanı kapa
+fanı arttır
+fanı düşür
+tv aç
+tv kapa
+televizyonu aç
+televizyonu kapa
+multimedyayı aç
+multimedyayı kapa
+müzik aç
+müzik kapa
+panjuru aç
+panjuru kapa
+perdeyi aç
+perdeyi kapa
+alarmı kur
+evet
+hayır
+parti zamanı
+dinlenme zamanı
+uyku zamanı
+eve geldim
+evden çıkıyorum
+günaydın
+i̇yi geceler
+film zamanı
+çalışma zamanı
+spor zamanı
+antrenman zamanı
+senaryo başlat
